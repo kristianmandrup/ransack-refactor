@@ -1,34 +1,15 @@
 require 'ransack/visitor'
 
+require 'ransack/association_path'
+require 'ransack/polymorph'
+require 'ransack/ransackable'
+require 'ransack/searchable'
+
 module Ransack
   class Context
     attr_reader :search, :object, :klass, :base, :engine, :visitor
     attr_accessor :auth_object, :search_key
 
-    # Active Record specific - put in AR module!
-    class << self
-
-      def for(object, options = {})
-        context = Class === object ? for_class(object, options) : for_object(object, options)
-        context or raise ArgumentError, "Don't know what context to use for #{object}"
-      end
-
-      def for_class(klass, options = {})
-        if klass < ActiveRecord::Base
-          Adapters::ActiveRecord::Context.new(klass, options)
-        end
-      end
-
-      def for_object(object, options = {})
-        case object
-        when ActiveRecord::Relation
-          Adapters::ActiveRecord::Context.new(object.klass, options)
-        end
-      end
-
-    end
-
-    # CRAZY UGLY INITIALIZER - Split it up into logical parts that can be overriden!!
     def initialize(object, options = {})
       @object = object.scoped
       @klass = @object.klass      
@@ -48,27 +29,11 @@ module Ransack
     # Recursive traversing!
     # Create separate class for this!
     def traverse(str, base = @base)
-      str ||= ''
+      traverser(str, base).traverse
+    end
 
-      # ONCE MORE SAME PATTERN!
-      if (segments = str.split(/_/)).size > 0
-        remainder = []
-        found_assoc = nil
-        while !found_assoc && segments.size > 0 do
-          # Strip the _of_Model_type text from the association name, but hold
-          # onto it in klass, for use as the next base
-          assoc, klass = unpolymorphize_association(segments.join('_'))
-          if found_assoc = get_association(assoc, base)
-            # recurse traverse!
-            base = traverse(remainder.join('_'), klass || found_assoc.klass)
-          end
-
-          remainder.unshift segments.pop
-        end
-        raise UntraversableAssociationError, "No association matches #{str}" unless found_assoc
-      end
-
-      klassify(base)
+    def traverser
+      Traverser.new(str, base)
     end
 
     def association_path name
@@ -77,6 +42,11 @@ module Ransack
 
     protected
 
+    include Polymorph
+    include Ransackable
+    include Searchable
+    include Joinable
+
     def bind_pairs       
       @bind_pairs = Hash.new do |hash, key|
         parent, attr_name = get_parent_and_attribute_name(key.to_s)
@@ -84,14 +54,6 @@ module Ransack
           hash[key] = [parent, attr_name]
         end
       end
-    end
-
-    def join_dependency 
-      @join_dependency ||= join_dependency(@object)
-    end
-
-    def join_type 
-      @join_type ||= options[:join_type] || Arel::OuterJoin
     end
 
     def search_key 
@@ -107,15 +69,15 @@ module Ransack
     end
 
     def default_table 
-      @default_table = Arel::Table.new(@base.table_name, :as => @base.aliased_table_name, :engine => @engine)
+      @default_table ||= arel_table
+    end
+
+    def arel_table
+      Arel::Table.new(@base.table_name, :as => @base.aliased_table_name, :engine => @engine)
     end
 
     def association_path_resolver
       @association_path_resolver ||= AssociationPathResolver.new # some arg(s)!?
     end
-
-    include Polymorph
-    include Ransackable
-    include Searchable
   end
 end

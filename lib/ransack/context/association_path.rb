@@ -10,9 +10,7 @@ module Ransack
         clear_association_parts
       end
 
-      # TODO: Refactor - see same pattern in other places, fx AssociationContext
       def resolve
-        # LOOKS LIKE VERY FAMILIAR PATTERN!!!
         while segments_remain_to_resolve? do
           unpolymorphize        
           handle_assoc if found_assoc?

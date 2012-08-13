@@ -2,13 +2,19 @@ require 'ransack/context'
 require 'ransack/adapters/active_record/3.1/context'
 require 'polyamorous'
 
+# require context helpers
+%w{class_method associater association_context classifier 
+  evaluator join_dependency parent_context search_params}.each do |helper|
+  require "ransack/adapters/active_record/context/#{helper}"
+end
+
 module Ransack
   module Adapters
     module ActiveRecord
       class Context < ::Ransack::Context
-        
         # Redefine a few things that have changed with 3.2.
-        
+        extend ClassMethods
+
         def initialize(object, options = {})
           super
           @visitor = @engine.connection.visitor

@@ -1,8 +1,9 @@
 require 'ransack/context'
-require 'polyamorous'
 
 module Ransack::Adapters::ActiveRecord
-  class Context < ::Ransack::Context    
+  class Context < ::Ransack::Context
+    include Ransack::Adapters::ActiveRecord::TableHelper
+
     def initialize(object, options = {})
       super
       @options = options 
@@ -31,10 +32,6 @@ module Ransack::Adapters::ActiveRecord
     end
 
     private
-
-    def classifier(parent)
-      Classifier.new parent
-    end    
 
     def get_parent_and_attribute_name(str, parent = @base)
       puts "get_parent_and_attribute_name: #{str}, #{parent}"  
