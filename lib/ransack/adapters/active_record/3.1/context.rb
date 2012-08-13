@@ -3,16 +3,17 @@ require 'polyamorous'
 
 module Ransack::Adapters::ActiveRecord
   class Context < ::Ransack::Context    
-    include TableHelper
-
     def initialize(object, options = {})
-      puts "init: #{object}, #{options}"
       super
       @options = options 
     end
 
     def evaluate search, opts = {}
-      Evaluater.new(search, opts).evaluate
+      evaluator(search, options).evaluate
+    end
+
+    def evaluator search, options = {}
+      @evaluator ||= Evaluater.new search, options
     end
 
     def visitor

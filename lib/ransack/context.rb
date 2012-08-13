@@ -5,6 +5,7 @@ module Ransack
     attr_reader :search, :object, :klass, :base, :engine, :visitor
     attr_accessor :auth_object, :search_key
 
+    # Active Record specific - put in AR module!
     class << self
 
       def for(object, options = {})
@@ -27,21 +28,10 @@ module Ransack
 
     end
 
+    # CRAZY UGLY INITIALIZER - Split it up into logical parts that can be overriden!!
     def initialize(object, options = {})
       @object = object.scoped
-      @klass = @object.klass
-      @join_dependency = join_dependency(@object)
-      @join_type = options[:join_type] || Arel::OuterJoin
-      @search_key = options[:search_key] || Ransack.options[:search_key]
-      @base = @join_dependency.join_base
-      @engine = @base.arel_engine
-      @default_table = Arel::Table.new(@base.table_name, :as => @base.aliased_table_name, :engine => @engine)
-      @bind_pairs = Hash.new do |hash, key|
-        parent, attr_name = get_parent_and_attribute_name(key.to_s)
-        if parent && attr_name
-          hash[key] = [parent, attr_name]
-        end
-      end
+      @klass = @object.klass      
     end
 
     # Convert a string representing a chain of associations and an attribute
@@ -55,9 +45,12 @@ module Ransack
       object.parent, object.attr_name = @bind_pairs[str]
     end
 
+    # Recursive traversing!
+    # Create separate class for this!
     def traverse(str, base = @base)
       str ||= ''
 
+      # ONCE MORE SAME PATTERN!
       if (segments = str.split(/_/)).size > 0
         remainder = []
         found_assoc = nil
@@ -66,6 +59,7 @@ module Ransack
           # onto it in klass, for use as the next base
           assoc, klass = unpolymorphize_association(segments.join('_'))
           if found_assoc = get_association(assoc, base)
+            # recurse traverse!
             base = traverse(remainder.join('_'), klass || found_assoc.klass)
           end
 
@@ -77,49 +71,51 @@ module Ransack
       klassify(base)
     end
 
-    def association_path(str, base = @base)
-      base = klassify(base)
-      str ||= ''
-      path = []
-      segments = str.split(/_/)
-      association_parts = []
-      if (segments = str.split(/_/)).size > 0
-        while segments.size > 0 && !base.columns_hash[segments.join('_')] && association_parts << segments.shift do
-          assoc, klass = unpolymorphize_association(association_parts.join('_'))
-          if found_assoc = get_association(assoc, base)
-            path += association_parts
-            association_parts = []
-            base = klassify(klass || found_assoc)
-          end
+    def association_path name
+      association_path_resolver.resolve
+    end
+
+    protected
+
+    def bind_pairs       
+      @bind_pairs = Hash.new do |hash, key|
+        parent, attr_name = get_parent_and_attribute_name(key.to_s)
+        if parent && attr_name
+          hash[key] = [parent, attr_name]
         end
       end
-
-      path.join('_')
     end
 
-    def unpolymorphize_association(str)
-      if (match = str.match(/_of_([^_]+?)_type$/))
-        [match.pre_match, Kernel.const_get(match.captures.first)]
-      else
-        [str, nil]
-      end
+    def join_dependency 
+      @join_dependency ||= join_dependency(@object)
     end
 
-    def ransackable_attribute?(str, klass)
-      klass.ransackable_attributes(auth_object).include? str
+    def join_type 
+      @join_type ||= options[:join_type] || Arel::OuterJoin
     end
 
-    def ransackable_association?(str, klass)
-      klass.ransackable_associations(auth_object).include? str
+    def search_key 
+      @search_key ||= options[:search_key] || Ransack.options[:search_key]
     end
 
-    def searchable_attributes(str = '')
-      traverse(str).ransackable_attributes(auth_object)
+    def base
+      @base ||= @join_dependency.join_base
     end
 
-    def searchable_associations(str = '')
-      traverse(str).ransackable_associations(auth_object)
+    def engine
+      @engine ||= @base.arel_engine
     end
 
+    def default_table 
+      @default_table = Arel::Table.new(@base.table_name, :as => @base.aliased_table_name, :engine => @engine)
+    end
+
+    def association_path_resolver
+      @association_path_resolver ||= AssociationPathResolver.new # some arg(s)!?
+    end
+
+    include Polymorph
+    include Ransackable
+    include Searchable
   end
 end

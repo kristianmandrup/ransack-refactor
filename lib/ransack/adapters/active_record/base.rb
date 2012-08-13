@@ -18,15 +18,6 @@ module Ransack
         def ransacker(name, opts = {}, &block)
           self._ransackers = _ransackers.merge name.to_s => Ransacker.new(self, name, opts, &block)
         end
-
-        def ransackable_attributes(auth_object = nil)
-          column_names + _ransackers.keys
-        end
-
-        def ransackable_associations(auth_object = nil)
-          reflect_on_all_associations.map {|a| a.name.to_s}
-        end
-
       end
     end
   end

@@ -1,45 +1,92 @@
 module Ransack::Adapters::ActiveRecord
   class Evaluator
-    attr_reader :search, :opts
+    attr_reader :search, :visitor, :options
 
-    def initialize search, opts = {}
-      @search, @opts = [search, opts]
+    def initialize search, options = {}
+      @search, @options = [search, options]
     end
 
-    # THE MAIN THING!!!
+    # THE MAIN Search Evaluator
     def evaluate
-      puts "evaluate: #{search}, #{opts}"
       distinct? ? distinct_relation : relation
-    end
-
-    def viz
-      @viz ||= Visitor.new
     end
 
     protected
 
     def relation
-      @relation ||= sorting? ? sort_relation : basic_search_relation
+      @relation ||= searcher.sort!
     end
 
-    def basic_search_relation
-      @object.where(viz.accept(search.base))
+    def visitor
+      @visitor ||= Visitor.new
     end
 
-    def sorting?
-      search.sorts.any?
+    def searcher
+      sorting? ? sort_searcher : basic_search
     end
 
-    def distinct?
-      opts[:distinct]
+    def basic_searcher
+      @basic_searcher ||= BasicSearcher.new(visitor, object)
     end
 
-    def sort_relation
-      relation.except(:order).order(viz.accept(search.sorts))
+    def sort_searcher
+      @sort_searcher ||= SortSearch.new(visitor, object, search, klass, options)
     end
 
-    def distinct_relation
-      relation.select("DISTINCT #{@klass.quoted_table_name}.*")
+    class BasicSearcher
+      delegate :visitor, :object, :search, :options, :to => :search_params
+
+      def initialize search_params
+        @search_params = search_params
+      end
+
+      def search!
+        object.where(criteria)
+      end
+
+      def criteria
+        visitor.accept(search.base)
+      end
+    end
+
+    class SortSearcher
+      attr_reader :search_params
+
+      def initialize search_params
+         @search_params = search_params
+      end
+
+      def search!
+        order_relation.order sort_criteria
+      end
+
+      protected
+
+      delegate :visitor, :object, :search, :options, :klass, :relation, :to => :search_params
+
+      def sorting?
+        sorts.any?
+      end
+
+      def sorts
+        search.sorts
+      end
+
+      def distinct?
+        options[:distinct]
+      end
+
+      def order_relation
+        relation.except(:order)
+      end
+
+      def criteria
+        visitor.accept(sorts)
+      end
+
+      def distinct_relation
+        relation.select("DISTINCT #{klass.quoted_table_name}.*")
+      end
     end
   end
 end

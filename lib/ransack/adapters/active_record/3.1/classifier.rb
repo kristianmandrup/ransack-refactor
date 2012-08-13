@@ -7,7 +7,6 @@ module Ransack::Adapters::ActiveRecord
     end
 
     def classify
-      puts "klassify: #{obj}"
       return obj if ar_class?
       return obj.klass if obj.respond_to? :klass        
       return obj.active_record if obj.respond_to? :active_record
